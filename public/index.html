@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jira Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            jira: { blue: '#0052CC', light: '#4C9AFF', dark: '#003884' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .status-todo       { background:#dfe1e6; color:#42526e; }
+    .status-inprogress { background:#deebff; color:#0052cc; }
+    .status-done       { background:#e3fcef; color:#006644; }
+    .status-default    { background:#f4f5f7; color:#6b778c; }
+    .priority-highest,.priority-high { color:#de350b; }
+    .priority-medium   { color:#ff8b00; }
+    .priority-low,.priority-lowest { color:#0065ff; }
+    .sidebar-item.active { background:#e9f2ff; border-left:3px solid #0052cc; }
+    .sidebar-item { border-left:3px solid transparent; }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:#f1f1f1; }
+    ::-webkit-scrollbar-thumb { background:#c1c7d0; border-radius:3px; }
+    .kanban-col { min-height:200px; }
+    .fade-in { animation: fadeIn .25s ease; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    .spinner { border:3px solid #f3f3f3; border-top:3px solid #0052cc; border-radius:50%; width:24px; height:24px; animation:spin .8s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+<!-- ── TOP NAV ── -->
+<nav class="bg-jira-blue text-white shadow-md flex items-center justify-between px-6 py-3 flex-shrink-0">
+  <div class="flex items-center gap-3">
+    <svg class="w-7 h-7" viewBox="0 0 32 32" fill="none">
+      <rect width="32" height="32" rx="6" fill="white" fill-opacity=".15"/>
+      <path d="M16 6 L26 16 L16 26 L6 16 Z" fill="white"/>
+      <path d="M16 6 L26 16 L21 16 L16 11 Z" fill="#4C9AFF"/>
+    </svg>
+    <span class="text-xl font-bold tracking-tight">Jira Dashboard</span>
+  </div>
+  <div class="flex items-center gap-4">
+    <span id="userBadge" class="text-sm bg-white/20 px-3 py-1 rounded-full hidden"></span>
+    <button onclick="openSettings()" class="flex items-center gap-2 bg-white/15 hover:bg-white/25 transition px-3 py-1.5 rounded-md text-sm font-medium">
+      &#9881; Settings
+    </button>
+  </div>
+</nav>
+
+<!-- ── MAIN ── -->
+<div class="flex flex-1 overflow-hidden h-[calc(100vh-56px)]">
+
+  <!-- SIDEBAR -->
+  <aside class="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+    <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Active Projects</h2>
+      <button onclick="loadProjects()" title="Refresh" class="text-gray-400 hover:text-jira-blue transition text-sm">&#8635;</button>
+    </div>
+    <div id="projectList" class="flex-1 overflow-y-auto py-2">
+      <div class="text-center text-gray-400 text-sm mt-10">
+        <p>Configure settings</p>
+        <p class="text-xs mt-1">to load projects</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="flex-1 overflow-y-auto p-6">
+    <div id="mainContent">
+      <!-- Welcome state -->
+      <div class="flex flex-col items-center justify-center h-full text-center py-24 fade-in">
+        <div class="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+          <svg class="w-10 h-10 text-jira-blue" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/>
+          </svg>
+        </div>
+        <h2 class="text-xl font-semibold text-gray-700 mb-2">Welcome to Jira Dashboard</h2>
+        <p class="text-gray-400 text-sm mb-6">Click <strong>Settings</strong> to connect your Jira Data Center server,<br/>then select a project to view its sprint backlog.</p>
+        <button onclick="openSettings()" class="bg-jira-blue text-white px-5 py-2 rounded-md hover:bg-jira-dark transition text-sm font-medium">
+          Connect to Jira
+        </button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── SETTINGS MODAL ── -->
+<div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 fade-in">
+    <div class="flex items-center justify-between px-6 py-4 border-b">
+      <h3 class="text-lg font-semibold text-gray-800">Jira Connection Settings</h3>
+      <button onclick="closeSettings()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Jira Server URL</label>
+        <input id="jiraUrl" type="url" placeholder="https://jira.yourcompany.com"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-jira-blue" />
+        <p class="text-xs text-gray-400 mt-1">Your Jira Data Center base URL</p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Personal Access Token (PAT)</label>
+        <input id="jiraPat" type="password" placeholder="Enter your PAT"
+          class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-jira-blue" />
+        <p class="text-xs text-gray-400 mt-1">Profile → Personal Access Tokens in Jira DC</p>
+      </div>
+      <div id="configStatus" class="hidden text-sm px-3 py-2 rounded-md"></div>
+    </div>
+    <div class="px-6 pb-5 flex justify-end gap-3">
+      <button onclick="closeSettings()" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition">Cancel</button>
+      <button onclick="saveConfig()" id="saveBtn"
+        class="bg-jira-blue text-white px-5 py-2 rounded-md hover:bg-jira-dark transition text-sm font-medium flex items-center gap-2">
+        <span>Connect</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  // ── CONFIG ──────────────────────────────────────────────
+  function openSettings() {
+    const saved = loadSavedConfig();
+    if (saved.url) $('jiraUrl').value = saved.url;
+    $('settingsModal').classList.remove('hidden');
+    $('settingsModal').classList.add('flex');
+    $('configStatus').classList.add('hidden');
+  }
+  function closeSettings() {
+    $('settingsModal').classList.add('hidden');
+    $('settingsModal').classList.remove('flex');
+  }
+  function loadSavedConfig() {
+    return { url: localStorage.getItem('jira_url') || '', token: localStorage.getItem('jira_token') || '' };
+  }
+  async function saveConfig() {
+    const url = $('jiraUrl').value.trim();
+    const token = $('jiraPat').value.trim();
+    if (!url || !token) { showConfigStatus('error', 'Please fill in both fields.'); return; }
+    const btn = $('saveBtn');
+    btn.innerHTML = '<span class="spinner inline-block"></span><span>Connecting...</span>';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, token })
+      });
+      const data = await res.json();
+      if (data.status === 'ok') {
+        localStorage.setItem('jira_url', url);
+        localStorage.setItem('jira_token', token);
+        const userBadge = $('userBadge');
+        userBadge.textContent = '👤 ' + data.user;
+        userBadge.classList.remove('hidden');
+        showConfigStatus('ok', `Connected as ${data.user}`);
+        setTimeout(() => { closeSettings(); loadProjects(); }, 800);
+      } else {
+        showConfigStatus('error', data.message || 'Connection failed.');
+      }
+    } catch (e) {
+      showConfigStatus('error', 'Server error: ' + e.message);
+    } finally {
+      btn.innerHTML = '<span>Connect</span>';
+      btn.disabled = false;
+    }
+  }
+  function showConfigStatus(type, msg) {
+    const el = $('configStatus');
+    el.className = type === 'ok'
+      ? 'text-sm px-3 py-2 rounded-md bg-green-50 text-green-700 border border-green-200'
+      : 'text-sm px-3 py-2 rounded-md bg-red-50 text-red-700 border border-red-200';
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  // ── PROJECTS ─────────────────────────────────────────────
+  async function loadProjects() {
+    const list = $('projectList');
+    list.innerHTML = '<div class="flex justify-center mt-10"><div class="spinner"></div></div>';
+    try {
+      const res = await fetch('/api/projects');
+      const projects = await res.json();
+      if (projects.error) { list.innerHTML = `<p class="text-red-500 text-xs px-4 mt-4">${projects.error}</p>`; return; }
+      if (!projects.length) { list.innerHTML = '<p class="text-gray-400 text-sm px-4 mt-4">No projects found.</p>'; return; }
+      list.innerHTML = projects.map(p => `
+        <div class="sidebar-item px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition flex items-center gap-2.5"
+             onclick="selectProject(this, '${p.key}', '${esc(p.name)}')" data-key="${p.key}">
+          ${p.avatarUrl
+            ? `<img src="${p.avatarUrl}" class="w-5 h-5 rounded" alt="" onerror="this.style.display='none'">`
+            : `<span class="w-5 h-5 rounded bg-jira-blue text-white text-xs flex items-center justify-center font-bold">${p.key[0]}</span>`
+          }
+          <div class="min-w-0">
+            <div class="text-sm font-medium text-gray-800 truncate">${esc(p.name)}</div>
+            <div class="text-xs text-gray-400">${p.key}</div>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) {
+      list.innerHTML = `<p class="text-red-500 text-xs px-4 mt-4">Error: ${e.message}</p>`;
+    }
+  }
+
+  let currentProject = null;
+
+  async function selectProject(el, key, name) {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+    currentProject = { key, name };
+    showLoading(`Loading sprints for <strong>${name}</strong>…`);
+    try {
+      const boardsRes = await fetch(`/api/boards?projectKey=${key}`);
+      const boards = await boardsRes.json();
+      if (boards.error || !boards.length) {
+        showError(`No Scrum boards found for ${name}. The project may use a Kanban board or have no boards.`);
+        return;
+      }
+      const board = boards[0];
+      const sprintRes = await fetch(`/api/sprint/active?boardId=${board.id}`);
+      const sprint = await sprintRes.json();
+      if (sprint && sprint.error) { showError(sprint.error); return; }
+      renderSprintView(name, key, board, sprint);
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
+  // ── SPRINT VIEW ──────────────────────────────────────────
+  async function renderSprintView(projectName, projectKey, board, sprint) {
+    const main = $('mainContent');
+    if (!sprint) {
+      main.innerHTML = `
+        <div class="fade-in">
+          ${projectHeader(projectName, projectKey, board, null)}
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-5 text-center mt-6">
+            <p class="text-amber-700 font-medium">No active sprint found</p>
+            <p class="text-amber-500 text-sm mt-1">Start a sprint in Jira to see it here.</p>
+          </div>
+        </div>`;
+      return;
+    }
+
+    main.innerHTML = `
+      <div class="fade-in">
+        ${projectHeader(projectName, projectKey, board, sprint)}
+        <div id="issueArea" class="mt-4">
+          <div class="flex justify-center py-10"><div class="spinner"></div></div>
+        </div>
+      </div>`;
+
+    try {
+      const res = await fetch(`/api/sprint/issues?sprintId=${sprint.id}`);
+      const issues = await res.json();
+      if (issues.error) { $('issueArea').innerHTML = `<p class="text-red-500">${issues.error}</p>`; return; }
+      renderKanban(issues, sprint);
+    } catch(e) {
+      $('issueArea').innerHTML = `<p class="text-red-500">${e.message}</p>`;
+    }
+  }
+
+  function projectHeader(projectName, projectKey, board, sprint) {
+    const startDate = sprint ? formatDate(sprint.startDate) : '';
+    const endDate   = sprint ? formatDate(sprint.endDate)   : '';
+    return `
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs bg-blue-100 text-jira-blue px-2 py-0.5 rounded font-semibold">${projectKey}</span>
+            <span class="text-xs text-gray-400">Board: ${esc(board.name)}</span>
+          </div>
+          <h1 class="text-2xl font-bold text-gray-900">${esc(projectName)}</h1>
+          ${sprint ? `<p class="text-sm text-gray-500 mt-1">Sprint: <strong>${esc(sprint.name)}</strong>
+            &nbsp;·&nbsp; ${startDate} → ${endDate}</p>` : ''}
+        </div>
+        <button onclick="loadBacklog(${board.id})" class="text-sm border border-gray-200 px-3 py-1.5 rounded-md hover:bg-gray-50 transition text-gray-600">
+          View Backlog
+        </button>
+      </div>`;
+  }
+
+  function renderKanban(issues, sprint) {
+    const groups = { todo: [], inprogress: [], done: [] };
+    issues.forEach(iss => {
+      const cat = iss.statusCategory;
+      if (cat === 'done') groups.done.push(iss);
+      else if (cat === 'indeterminate') groups.inprogress.push(iss);
+      else groups.todo.push(iss);
+    });
+    const total = issues.length;
+    $('issueArea').innerHTML = `
+      <div class="grid grid-cols-3 gap-4 fade-in">
+        ${kanbanCol('To Do', groups.todo, 'status-todo', total)}
+        ${kanbanCol('In Progress', groups.inprogress, 'status-inprogress', total)}
+        ${kanbanCol('Done', groups.done, 'status-done', total)}
+      </div>
+      <p class="text-xs text-gray-400 mt-3 text-right">${total} issues total</p>`;
+  }
+
+  function kanbanCol(title, issues, badgeClass, total) {
+    const pct = total ? Math.round((issues.length / total) * 100) : 0;
+    return `
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <span class="font-semibold text-gray-700 text-sm">${title}</span>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">${pct}%</span>
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full ${badgeClass}">${issues.length}</span>
+          </div>
+        </div>
+        <div class="p-3 space-y-2 kanban-col overflow-y-auto max-h-[calc(100vh-320px)]">
+          ${issues.length === 0
+            ? '<p class="text-gray-300 text-xs text-center py-6">No issues</p>'
+            : issues.map(issueCard).join('')}
+        </div>
+      </div>`;
+  }
+
+  function issueCard(iss) {
+    const priorityColor = {
+      Highest: 'text-red-600', High: 'text-red-500',
+      Medium: 'text-orange-500', Low: 'text-blue-500', Lowest: 'text-blue-400'
+    }[iss.priority] || 'text-gray-400';
+    const prioritySymbol = { Highest: '↑↑', High: '↑', Medium: '=', Low: '↓', Lowest: '↓↓' }[iss.priority] || '';
+    return `
+      <div class="border border-gray-100 rounded-lg p-3 hover:shadow-md hover:border-blue-200 transition cursor-default group">
+        <div class="flex items-start justify-between gap-2 mb-1.5">
+          <span class="text-xs font-mono text-jira-blue font-semibold">${esc(iss.key)}</span>
+          <span class="text-xs ${priorityColor} font-bold flex-shrink-0" title="${esc(iss.priority)}">${prioritySymbol}</span>
+        </div>
+        <p class="text-sm text-gray-800 leading-snug group-hover:text-jira-blue transition">${esc(iss.summary)}</p>
+        <div class="mt-2 flex items-center justify-between">
+          <span class="text-xs text-gray-400 truncate max-w-[120px]" title="${esc(iss.assignee)}">👤 ${esc(iss.assignee)}</span>
+          <span class="text-xs text-gray-400">${esc(iss.issueType)}</span>
+        </div>
+      </div>`;
+  }
+
+  // ── BACKLOG VIEW ──────────────────────────────────────────
+  async function loadBacklog(boardId) {
+    $('issueArea').innerHTML = '<div class="flex justify-center py-10"><div class="spinner"></div></div>';
+    try {
+      const res = await fetch(`/api/backlog?boardId=${boardId}`);
+      const issues = await res.json();
+      if (issues.error) { $('issueArea').innerHTML = `<p class="text-red-500">${issues.error}</p>`; return; }
+      renderBacklogList(issues);
+    } catch(e) {
+      $('issueArea').innerHTML = `<p class="text-red-500">${e.message}</p>`;
+    }
+  }
+
+  function renderBacklogList(issues) {
+    if (!issues.length) {
+      $('issueArea').innerHTML = '<p class="text-gray-400 text-sm text-center py-10">Backlog is empty.</p>';
+      return;
+    }
+    $('issueArea').innerHTML = `
+      <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden fade-in">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <span class="font-semibold text-gray-700">Backlog <span class="text-gray-400 font-normal text-sm">(${issues.length} issues)</span></span>
+          <span class="text-xs text-gray-400">Unassigned to any sprint</span>
+        </div>
+        <div class="divide-y divide-gray-50">
+          ${issues.map(iss => `
+            <div class="px-5 py-3 hover:bg-gray-50 transition flex items-center gap-4">
+              <span class="text-xs font-mono text-jira-blue font-semibold w-24 flex-shrink-0">${esc(iss.key)}</span>
+              <span class="text-sm text-gray-800 flex-1 min-w-0 truncate">${esc(iss.summary)}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${statusBadgeClass(iss.statusCategory)}">${esc(iss.statusName)}</span>
+              <span class="text-xs text-gray-400 flex-shrink-0 w-28 truncate text-right" title="${esc(iss.assignee)}">👤 ${esc(iss.assignee)}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  // ── HELPERS ───────────────────────────────────────────────
+  function statusBadgeClass(cat) {
+    if (cat === 'done') return 'status-done';
+    if (cat === 'indeterminate') return 'status-inprogress';
+    return 'status-todo';
+  }
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function formatDate(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }); }
+    catch { return iso; }
+  }
+  function showLoading(msg) {
+    $('mainContent').innerHTML = `
+      <div class="flex flex-col items-center justify-center py-24 text-gray-400 fade-in">
+        <div class="spinner mb-4"></div>
+        <p class="text-sm">${msg}</p>
+      </div>`;
+  }
+  function showError(msg) {
+    $('mainContent').innerHTML = `
+      <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center fade-in">
+        <p class="text-red-600 font-medium">Error</p>
+        <p class="text-red-500 text-sm mt-1">${esc(msg)}</p>
+      </div>`;
+  }
+
+  // ── INIT ──────────────────────────────────────────────────
+  (async () => {
+    const saved = loadSavedConfig();
+    if (saved.url && saved.token) {
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(saved)
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          const badge = $('userBadge');
+          badge.textContent = '👤 ' + data.user;
+          badge.classList.remove('hidden');
+          loadProjects();
+        }
+      } catch {}
+    }
+  })();
+</script>
+</body>
+</html>
