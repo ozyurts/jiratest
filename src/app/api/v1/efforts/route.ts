@@ -17,12 +17,16 @@ function toDto(e: {
   pastPercentage: number; todayPercentage: number; futurePercentage: number;
   notes: string | null; createdBy: string; lastUpdater: string;
   operationTime: Date; isDeleted: string;
+  // teamId snapshot on entry; fall back to user's current team for old entries
+  teamId: string | null;
+  team: { name: string } | null;
   user: { fullName: string; teamId: string | null; team: { name: string } | null };
 }): EffortEntryDto {
   return {
     id: e.id, userId: e.userId,
     userFullName: e.user.fullName,
-    teamId: e.user.teamId, teamName: e.user.team?.name ?? null,
+    teamId: e.teamId ?? e.user.teamId,
+    teamName: e.team?.name ?? e.user.team?.name ?? null,
     weekStartDate: e.weekStartDate.toISOString().slice(0, 10),
     pastPercentage: e.pastPercentage, todayPercentage: e.todayPercentage,
     futurePercentage: e.futurePercentage, notes: e.notes,
@@ -44,20 +48,27 @@ export async function GET(request: NextRequest) {
 
     const { page, pageSize, userId, teamId, weekFrom, weekTo } = queryParsed.data;
 
-    const where: Record<string, unknown> = { isDeleted: "NO" };
-    if (userId) where.userId = userId;
-    if (teamId) where.user = { teamId };
-    if (weekFrom || weekTo) {
-      where.weekStartDate = {
-        ...(weekFrom ? { gte: new Date(weekFrom) } : {}),
-        ...(weekTo ? { lte: new Date(weekTo) } : {}),
-      };
-    }
+    // Filter by teamId snapshot on entry; also catch old entries (null teamId) via user.teamId
+    const teamFilter = teamId
+      ? { OR: [{ teamId }, { AND: [{ teamId: null }, { user: { teamId } }] }] }
+      : {};
+
+    const where = {
+      isDeleted: "NO",
+      ...(userId ? { userId } : {}),
+      ...teamFilter,
+      ...(weekFrom || weekTo ? {
+        weekStartDate: {
+          ...(weekFrom ? { gte: new Date(weekFrom) } : {}),
+          ...(weekTo ? { lte: new Date(weekTo) } : {}),
+        },
+      } : {}),
+    };
 
     const [entries, total] = await prisma.$transaction([
       prisma.effortEntry.findMany({
         where,
-        include: { user: { include: { team: true } } },
+        include: { team: true, user: { include: { team: true } } },
         orderBy: [{ weekStartDate: "desc" }, { user: { fullName: "asc" } }],
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -89,11 +100,16 @@ export async function POST(request: NextRequest) {
 
     const { weekStartDate, pastPercentage, todayPercentage, futurePercentage, notes } = parsed.data;
 
-    // Normalise to Monday 00:00 UTC
     const parsedDate = new Date(weekStartDate + "T00:00:00.000Z");
     const monday = getWeekStart(parsedDate);
 
-    // Upsert: one entry per user per week
+    // Fetch user's current teamId to snapshot on the entry
+    const dbUser = await prisma.user.findFirst({
+      where: { id: currentUser.sub, isDeleted: "NO" },
+      select: { teamId: true },
+    });
+    const snapshotTeamId = dbUser?.teamId ?? null;
+
     const existing = await prisma.effortEntry.findFirst({
       where: { userId: currentUser.sub, weekStartDate: monday, isDeleted: "NO" },
     });
@@ -104,9 +120,10 @@ export async function POST(request: NextRequest) {
         data: {
           pastPercentage, todayPercentage, futurePercentage,
           notes: notes ?? null,
+          teamId: snapshotTeamId,
           ...updateAudit(currentUser.email),
         },
-        include: { user: { include: { team: true } } },
+        include: { team: true, user: { include: { team: true } } },
       });
       logger.info("Effort updated", { entryId: updated.id, userId: currentUser.sub });
       return ok(toDto(updated));
@@ -115,11 +132,14 @@ export async function POST(request: NextRequest) {
     const audit = createAudit(currentUser.email);
     const entry = await prisma.effortEntry.create({
       data: {
-        userId: currentUser.sub, weekStartDate: monday,
+        userId: currentUser.sub,
+        teamId: snapshotTeamId,
+        weekStartDate: monday,
         pastPercentage, todayPercentage, futurePercentage,
-        notes: notes ?? null, ...audit,
+        notes: notes ?? null,
+        ...audit,
       },
-      include: { user: { include: { team: true } } },
+      include: { team: true, user: { include: { team: true } } },
     });
 
     logger.info("Effort created", { entryId: entry.id, userId: currentUser.sub });

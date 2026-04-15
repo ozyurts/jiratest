@@ -47,6 +47,9 @@ export const authApi = {
 
   me: () =>
     request<ApiResponse<MeDto>>("/auth/me"),
+
+  updateProfile: (data: { teamId?: string | null }) =>
+    request<ApiResponse<MeDto>>("/auth/me", { method: "PATCH", body: JSON.stringify(data) }),
 };
 
 // ── Teams ─────────────────────────────────────────────────────────────────────

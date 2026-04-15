@@ -1,7 +1,6 @@
 /**
- * GET /api/v1/efforts/trends
- * Admin only — weekly trend for a specific user or team over last N weeks.
- * Query params: userId?, teamId?, weeks? (default 12)
+ * GET /api/v1/efforts/trends — Admin only.
+ * Uses teamId snapshot on entries; falls back to user.teamId for old entries.
  */
 import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
@@ -24,21 +23,21 @@ export async function GET(request: NextRequest) {
     const weekStarts = getLastNWeekStarts(weeksBack);
     const fromDate = weekStarts[0];
 
-    const where: Record<string, unknown> = {
+    const teamFilter = teamId && !userId
+      ? { OR: [{ teamId }, { AND: [{ teamId: null }, { user: { teamId } }] }] }
+      : {};
+
+    const where = {
       isDeleted: "NO",
       weekStartDate: { gte: fromDate },
+      user: { isDeleted: "NO" },
+      ...(userId ? { userId } : {}),
+      ...teamFilter,
     };
-
-    if (userId) {
-      where.userId = userId;
-    } else if (teamId) {
-      where.user = { teamId, isDeleted: "NO" };
-    } else {
-      where.user = { isDeleted: "NO" };
-    }
 
     const entries = await prisma.effortEntry.findMany({
       where,
+      select: { weekStartDate: true, pastPercentage: true, todayPercentage: true, futurePercentage: true },
       orderBy: { weekStartDate: "asc" },
     });
 

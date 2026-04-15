@@ -69,14 +69,19 @@ export function Navbar({ user }: NavbarProps) {
             ))}
           </div>
 
-          {/* User info + logout */}
+          {/* User info + profile link + logout */}
           <div className="flex items-center gap-3">
-            <div className="hidden sm:block text-right">
+            <Link
+              href="/profile"
+              className="hidden sm:block text-right hover:opacity-80 transition-opacity"
+            >
               <p className="text-sm font-medium text-gray-900">{user.fullName}</p>
               <p className="text-xs text-gray-500">
-                {user.teamName ?? "Takım yok"} · {user.role === "ADMIN" ? "Admin" : "Kullanıcı"}
+                {user.teamName ?? <span className="text-amber-500">Takım seçilmedi</span>}
+                {" · "}
+                {user.role === "ADMIN" ? "Admin" : "Kullanıcı"}
               </p>
-            </div>
+            </Link>
             <button
               onClick={handleLogout}
               disabled={loggingOut}

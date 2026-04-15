@@ -13,11 +13,14 @@ function toDto(e: {
   pastPercentage: number; todayPercentage: number; futurePercentage: number;
   notes: string | null; createdBy: string; lastUpdater: string;
   operationTime: Date; isDeleted: string;
+  teamId: string | null;
+  team: { name: string } | null;
   user: { fullName: string; teamId: string | null; team: { name: string } | null };
 }): EffortEntryDto {
   return {
     id: e.id, userId: e.userId, userFullName: e.user.fullName,
-    teamId: e.user.teamId, teamName: e.user.team?.name ?? null,
+    teamId: e.teamId ?? e.user.teamId,
+    teamName: e.team?.name ?? e.user.team?.name ?? null,
     weekStartDate: e.weekStartDate.toISOString().slice(0, 10),
     pastPercentage: e.pastPercentage, todayPercentage: e.todayPercentage,
     futurePercentage: e.futurePercentage, notes: e.notes,
@@ -41,7 +44,7 @@ export async function GET(request: NextRequest) {
     const [entries, total] = await prisma.$transaction([
       prisma.effortEntry.findMany({
         where,
-        include: { user: { include: { team: true } } },
+        include: { team: true, user: { include: { team: true } } },
         orderBy: { weekStartDate: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,

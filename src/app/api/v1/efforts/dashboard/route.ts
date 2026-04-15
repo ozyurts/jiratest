@@ -1,8 +1,7 @@
 /**
  * GET /api/v1/efforts/dashboard
- * Admin only — returns aggregated data for the dashboard:
- * - Weekly averages (team-wide, last 12 weeks)
- * - Latest entry per member
+ * Admin only — aggregated dashboard data.
+ * Uses teamId snapshot on entries; falls back to user.teamId for old entries.
  */
 import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
@@ -24,26 +23,24 @@ export async function GET(request: NextRequest) {
     const weekStarts = getLastNWeekStarts(weeksBack);
     const fromDate = weekStarts[0];
 
-    const userFilter = teamId
-      ? { user: { teamId, isDeleted: "NO" } }
-      : { user: { isDeleted: "NO" } };
+    // Filter by teamId snapshot; catch old entries (null teamId) via user.teamId
+    const teamFilter = teamId
+      ? { OR: [{ teamId }, { AND: [{ teamId: null }, { user: { teamId } }] }] }
+      : {};
 
-    // Fetch entries for the date range
     const entries = await prisma.effortEntry.findMany({
       where: {
         isDeleted: "NO",
         weekStartDate: { gte: fromDate },
-        ...userFilter,
+        user: { isDeleted: "NO" },
+        ...teamFilter,
       },
-      include: { user: { include: { team: true } } },
+      include: { team: true, user: { include: { team: true } } },
       orderBy: { weekStartDate: "asc" },
     });
 
     // ── Weekly averages ────────────────────────────────────────────────────────
-    const weekMap = new Map<
-      string,
-      { past: number[]; today: number[]; future: number[] }
-    >();
+    const weekMap = new Map<string, { past: number[]; today: number[]; future: number[] }>();
 
     for (const e of entries) {
       const key = e.weekStartDate.toISOString().slice(0, 10);
@@ -71,15 +68,11 @@ export async function GET(request: NextRequest) {
 
     // ── Latest entry per member ───────────────────────────────────────────────
     const allUsers = await prisma.user.findMany({
-      where: {
-        isDeleted: "NO",
-        ...(teamId ? { teamId } : {}),
-      },
+      where: { isDeleted: "NO", ...(teamId ? { teamId } : {}) },
       include: { team: true },
       orderBy: { fullName: "asc" },
     });
 
-    // Latest entry per userId
     const latestEntryMap = new Map<string, (typeof entries)[number]>();
     for (const e of entries) {
       const existing = latestEntryMap.get(e.userId);
@@ -90,11 +83,13 @@ export async function GET(request: NextRequest) {
 
     const memberSummaries: MemberSummaryDto[] = allUsers.map((u) => {
       const latest = latestEntryMap.get(u.id);
+      const entryTeamId = latest ? (latest.teamId ?? latest.user.teamId) : u.teamId;
+      const entryTeamName = latest
+        ? (latest.team?.name ?? latest.user.team?.name ?? null)
+        : u.team?.name ?? null;
       return {
-        userId: u.id,
-        fullName: u.fullName,
-        teamId: u.teamId,
-        teamName: u.team?.name ?? null,
+        userId: u.id, fullName: u.fullName,
+        teamId: entryTeamId, teamName: entryTeamName,
         latestWeek: latest?.weekStartDate.toISOString().slice(0, 10) ?? null,
         pastPercentage: latest?.pastPercentage ?? null,
         todayPercentage: latest?.todayPercentage ?? null,
@@ -102,8 +97,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const dto: DashboardDto = { teamAverages, memberSummaries };
-    return ok(dto);
+    return ok({ teamAverages, memberSummaries } as DashboardDto);
   } catch {
     return internalError();
   }

@@ -25,6 +25,7 @@ model Team {
   isDeleted     String   @default("NO") // YES | NO  (NFR §5.1 — soft delete)
 
   users         User[]
+  effortEntries EffortEntry[]
 
   @@map("teams")
 }
@@ -63,6 +64,10 @@ model EffortEntry {
   userId             String
   user               User     @relation(fields: [userId], references: [id])
 
+  // Team snapshot at entry time — so team changes only affect future entries
+  teamId             String?
+  team               Team?    @relation(fields: [teamId], references: [id])
+
   weekStartDate      DateTime // Always Monday (UTC, 00:00:00)
 
   // Three effort categories (must sum to 100)
@@ -82,6 +87,7 @@ model EffortEntry {
   @@unique([userId, weekStartDate]) // One entry per user per week
   @@index([weekStartDate])          // NFR §10.1 — index filtered columns
   @@index([userId])
+  @@index([teamId])
   @@map("effort_entries")
 }
 
