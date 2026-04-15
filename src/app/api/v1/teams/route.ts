@@ -29,11 +29,9 @@ function toDto(team: {
   };
 }
 
+// GET is intentionally public — team names are needed for self-registration
 export async function GET(_request: NextRequest) {
   try {
-    const user = await getCurrentUser();
-    if (!user) return unauthorized();
-
     const teams = await prisma.team.findMany({
       where: { isDeleted: "NO" },
       orderBy: { name: "asc" },

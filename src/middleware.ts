@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const PUBLIC_PATHS = ["/login", "/register", "/api/v1/auth/login", "/api/v1/auth/register", "/api/health"];
+const PUBLIC_PATHS = ["/login", "/register", "/api/v1/auth/login", "/api/v1/auth/register", "/api/health", "/api/v1/teams"];
 const ADMIN_PATHS = ["/admin", "/api/v1/users", "/api/v1/efforts/dashboard", "/api/v1/efforts/trends"];
 
 function getJwtSecret(): Uint8Array {
