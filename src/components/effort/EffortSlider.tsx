@@ -204,17 +204,9 @@ export function EffortSlider({ initialValues, weekStartDate, weekNumber, onSaved
               max={100}
               value={values[cat.key]}
               onChange={(e) => handleSliderChange(cat.key, parseInt(e.target.value, 10))}
-              className={`w-full h-2 rounded-full cursor-pointer ${cat.trackColor}`}
+              className={`w-full cursor-pointer ${cat.trackColor}`}
               aria-label={`${cat.label} kaydırıcı`}
             />
-
-            {/* Visual bar */}
-            <div className="mt-2 h-2 w-full rounded-full bg-gray-200 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-200 ${cat.color}`}
-                style={{ width: `${values[cat.key]}%` }}
-              />
-            </div>
           </div>
         ))}
       </div>
