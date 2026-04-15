@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { effortsApi } from "@/lib/api-client";
@@ -15,6 +15,7 @@ interface EffortValues {
 interface EffortSliderProps {
   initialValues?: EffortValues;
   weekStartDate?: Date;
+  weekNumber?: number;
   onSaved?: () => void;
 }
 
@@ -55,7 +56,7 @@ function clamp(v: number) {
   return Math.max(0, Math.min(100, Math.round(v)));
 }
 
-export function EffortSlider({ initialValues, weekStartDate, onSaved }: EffortSliderProps) {
+export function EffortSlider({ initialValues, weekStartDate, weekNumber, onSaved }: EffortSliderProps) {
   const weekStart = weekStartDate ?? getWeekStart();
   const weekLabel = formatWeekLabel(weekStart);
 
@@ -65,7 +66,15 @@ export function EffortSlider({ initialValues, weekStartDate, onSaved }: EffortSl
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+
+  // initialValues prop değiştiğinde (arka plan reload) değerleri güncelle —
+  // yalnızca kullanıcı aktif olarak düzenleme yapmıyorsa
+  useEffect(() => {
+    if (initialValues && !saving) {
+      setValues(initialValues);
+    }
+  }, [initialValues?.past, initialValues?.today, initialValues?.future]);
 
   const total = values.past + values.today + values.future;
   const isValid = total === 100;
@@ -93,7 +102,7 @@ export function EffortSlider({ initialValues, weekStartDate, onSaved }: EffortSl
 
         return { ...prev, [changed]: clamped, [others[0]]: a, [others[1]]: b };
       });
-      setSuccess(false);
+      setSavedAt(null);
     },
     []
   );
@@ -118,8 +127,9 @@ export function EffortSlider({ initialValues, weekStartDate, onSaved }: EffortSl
         futurePercentage: values.future,
         notes: notes.trim() || null,
       });
-      setSuccess(true);
-      onSaved?.();
+      setSavedAt(new Date());
+      // Arka plan yenilemeyi geciktir — başarı mesajı görünür kalsın
+      setTimeout(() => onSaved?.(), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kayıt sırasında bir hata oluştu.");
     } finally {
@@ -127,12 +137,23 @@ export function EffortSlider({ initialValues, weekStartDate, onSaved }: EffortSl
     }
   }
 
+  const savedTimeLabel = savedAt
+    ? savedAt.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Week header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm text-gray-500">Hafta</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-gray-500">Hafta</p>
+            {weekNumber && (
+              <span className="rounded-full bg-primary-50 text-primary-600 border border-primary-100 px-2 py-0.5 text-xs font-semibold">
+                Hafta {weekNumber}
+              </span>
+            )}
+          </div>
           <p className="font-semibold text-gray-900">{weekLabel}</p>
         </div>
         <div
@@ -253,9 +274,19 @@ export function EffortSlider({ initialValues, weekStartDate, onSaved }: EffortSl
 
       <ErrorAlert message={error} onDismiss={() => setError(null)} />
 
-      {success && (
-        <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800 text-center">
-          Efor girişi başarıyla kaydedildi!
+      {/* Başarı mesajı — kalıcı, slider'ı sökmeden gösterilir */}
+      {savedAt && (
+        <div
+          role="status"
+          className="flex items-center gap-3 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800"
+        >
+          <svg className="h-5 w-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          <span>
+            Efor girişi başarıyla kaydedildi.{" "}
+            <span className="text-emerald-600 font-medium">{savedTimeLabel}</span> itibarıyla güncel.
+          </span>
         </div>
       )}
 
@@ -266,7 +297,7 @@ export function EffortSlider({ initialValues, weekStartDate, onSaved }: EffortSl
         size="lg"
         className="w-full"
       >
-        Kaydet
+        {savedAt ? "Güncelle" : "Kaydet"}
       </Button>
     </div>
   );

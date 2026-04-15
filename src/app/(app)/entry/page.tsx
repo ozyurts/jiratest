@@ -1,43 +1,55 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card } from "@/components/ui/Card";
 import { EffortSlider } from "@/components/effort/EffortSlider";
 import { LoadingSpinner } from "@/components/shared/LoadingSpinner";
 import { ErrorAlert } from "@/components/shared/ErrorAlert";
 import { effortsApi } from "@/lib/api-client";
-import { getWeekStart } from "@/lib/week";
+import { getWeekStart, getISOWeekNumber } from "@/lib/week";
 import type { EffortEntryDto } from "@/types";
 
 export default function EntryPage() {
   const [existing, setExisting] = useState<EffortEntryDto | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const weekStart = getWeekStart();
   const weekKey = weekStart.toISOString().slice(0, 10);
+  const weekNumber = getISOWeekNumber(weekStart);
 
-  async function loadCurrentWeek() {
-    setLoading(true);
+  // initialLoad=true → spinner göster; false → slider'ı sökmeden arka planda güncelle
+  const loadCurrentWeek = useCallback(async (initialLoad = false) => {
+    if (initialLoad) setInitialLoading(true);
     try {
-      const res = await effortsApi.myHistory({ page: 1, pageSize: 1 });
+      const res = await effortsApi.myHistory({ page: 1, pageSize: 4 });
       const entry = res.data.find((e) => e.weekStartDate === weekKey) ?? null;
       setExisting(entry);
     } catch {
       setError("Mevcut efor verisi yüklenemedi.");
     } finally {
-      setLoading(false);
+      if (initialLoad) setInitialLoading(false);
     }
-  }
+  }, [weekKey]);
 
   useEffect(() => {
-    loadCurrentWeek();
-  }, []);
+    loadCurrentWeek(true);
+  }, [loadCurrentWeek]);
+
+  const handleSaved = useCallback(() => {
+    // Arka planda yenile — slider unmount olmaz, başarı mesajı görünür kalır
+    loadCurrentWeek(false);
+  }, [loadCurrentWeek]);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Haftalık Efor Girişi</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-gray-900">Haftalık Efor Girişi</h1>
+          <span className="rounded-full bg-primary-100 text-primary-700 px-3 py-1 text-sm font-semibold">
+            Hafta {weekNumber}
+          </span>
+        </div>
         <p className="text-sm text-gray-500 mt-1">
           Bu haftaki iş gücünüzü üç kategori arasında dağıtın. Toplam %100 olmalıdır.
         </p>
@@ -45,18 +57,17 @@ export default function EntryPage() {
 
       <ErrorAlert message={error} onDismiss={() => setError(null)} />
 
-      {loading ? (
+      {initialLoading ? (
         <Card>
           <div className="py-12">
             <LoadingSpinner />
           </div>
         </Card>
       ) : (
-        <Card
-          title={existing ? "Bu Haftaki Girişinizi Güncelleyin" : "Bu Hafta İçin Efor Girin"}
-        >
+        <Card title={existing ? "Bu Haftaki Girişinizi Güncelleyin" : "Bu Hafta İçin Efor Girin"}>
           <EffortSlider
             weekStartDate={weekStart}
+            weekNumber={weekNumber}
             initialValues={
               existing
                 ? {
@@ -66,7 +77,7 @@ export default function EntryPage() {
                   }
                 : undefined
             }
-            onSaved={loadCurrentWeek}
+            onSaved={handleSaved}
           />
         </Card>
       )}

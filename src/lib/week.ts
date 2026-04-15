@@ -54,3 +54,15 @@ export function getLastNWeekStarts(n: number, from: Date = new Date()): Date[] {
 export function weekStartToISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
+
+/**
+ * Returns the ISO week number (1–53) for a given date.
+ * ISO 8601: week 1 contains the first Thursday of the year; weeks start on Monday.
+ */
+export function getISOWeekNumber(date: Date = new Date()): number {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7; // make Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - day); // move to nearest Thursday
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+}
