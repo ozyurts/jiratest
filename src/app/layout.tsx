@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Workload Tracker",
+  title: "Momentum",
   description: "Ekip iş gücü dağılım analiz aracı",
 };
 

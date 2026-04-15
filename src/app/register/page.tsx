@@ -71,9 +71,9 @@ export default function RegisterPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-600 text-white font-bold text-2xl shadow-lg mb-4">
-            W
+            M
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Workload Tracker</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Momentum</h1>
           <p className="text-sm text-gray-500 mt-1">Yeni hesap oluşturun</p>
         </div>
 

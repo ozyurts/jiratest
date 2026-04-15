@@ -46,9 +46,9 @@ export function Navbar({ user }: NavbarProps) {
           {/* Brand */}
           <Link href="/entry" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white font-bold text-sm">
-              W
+              M
             </div>
-            <span className="font-semibold text-gray-900">Workload Tracker</span>
+            <span className="font-semibold text-gray-900">Momentum</span>
           </Link>
 
           {/* Nav links */}
