@@ -1,0 +1,102 @@
+// Prisma Schema — Workload Tracker
+// Dev: SQLite | Prod: PostgreSQL (switch provider via DATABASE_URL env var)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Teams — managed by Admin
+// ─────────────────────────────────────────────────────────────────────────────
+model Team {
+  id            String   @id @default(cuid())
+  name          String   @unique
+
+  // NFR §5.2 — Audit columns (mandatory on every table)
+  createdBy     String
+  lastUpdater   String
+  operationTime DateTime @default(now()) @updatedAt
+  lastOperation String   // CREATE | UPDATE | DELETE
+  isDeleted     String   @default("NO") // YES | NO  (NFR §5.1 — soft delete)
+
+  users         User[]
+
+  @@map("teams")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Users — self-registration; role assigned by Admin
+// ─────────────────────────────────────────────────────────────────────────────
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  fullName      String
+  role          String   @default("USER") // USER | ADMIN
+
+  teamId        String?
+  team          Team?    @relation(fields: [teamId], references: [id])
+
+  // NFR §5.2 — Audit columns
+  createdBy     String
+  lastUpdater   String
+  operationTime DateTime @default(now()) @updatedAt
+  lastOperation String
+  isDeleted     String   @default("NO")
+
+  effortEntries EffortEntry[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Effort Entries — weekly effort distribution per user
+// ─────────────────────────────────────────────────────────────────────────────
+model EffortEntry {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+
+  weekStartDate      DateTime // Always Monday (UTC, 00:00:00)
+
+  // Three effort categories (must sum to 100)
+  pastPercentage     Int      // Geçmişin İşleri
+  todayPercentage    Int      // Bugünün İşleri
+  futurePercentage   Int      // Yarının İşleri
+
+  notes              String?
+
+  // NFR §5.2 — Audit columns
+  createdBy          String
+  lastUpdater        String
+  operationTime      DateTime @default(now()) @updatedAt
+  lastOperation      String
+  isDeleted          String   @default("NO")
+
+  @@unique([userId, weekStartDate]) // One entry per user per week
+  @@index([weekStartDate])          // NFR §10.1 — index filtered columns
+  @@index([userId])
+  @@map("effort_entries")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Refresh Tokens — JWT revocation (NFR §4.1)
+// ─────────────────────────────────────────────────────────────────────────────
+model RefreshToken {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

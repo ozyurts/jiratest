@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**", "refactor/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-lint-test:
+    name: Build → Lint → Type-check → Test
+    runs-on: ubuntu-latest
+
+    env:
+      DATABASE_URL: "file:./test.db"
+      JWT_SECRET: "ci-test-secret-minimum-32-chars-replace-in-prod"
+      NODE_ENV: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Push DB schema (test SQLite)
+        run: npx prisma db push
+
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Build
+        run: npm run build

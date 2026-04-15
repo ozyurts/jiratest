@@ -1,0 +1,15 @@
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Workload Tracker",
+  description: "Ekip iş gücü dağılım analiz aracı",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="tr">
+      <body className="bg-gray-50 text-gray-900 antialiased">{children}</body>
+    </html>
+  );
+}

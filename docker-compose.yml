@@ -1,0 +1,48 @@
+version: "3.9"
+
+# Local full-stack dev environment (NFR §11.2)
+# Usage: docker-compose up --build
+# Credentials below are DEV ONLY — not deployable to production (NFR §4.5).
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: workload_dev
+      POSTGRES_USER: workload_user
+      # DEV ONLY — never use in production
+      POSTGRES_PASSWORD: devpassword123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workload_user -d workload_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      # Points to the postgres service above (DEV ONLY)
+      DATABASE_URL: "postgresql://workload_user:devpassword123@db:5432/workload_dev?schema=public"
+      # DEV ONLY secret — replace in production via secrets manager
+      JWT_SECRET: "dev-secret-replace-in-production-minimum-32-chars!!"
+      JWT_ACCESS_EXPIRES_IN: "3600"
+      JWT_REFRESH_EXPIRES_IN: "86400"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
