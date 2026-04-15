@@ -83,7 +83,8 @@ export async function PATCH(request: NextRequest) {
 
     logger.info("User changed team", { userId: tokenUser.sub, newTeamId: teamId });
     return ok(toMeDto(updatedUser));
-  } catch {
+  } catch (err) {
+    logger.error("PATCH /auth/me failed", { error: String(err) });
     return internalError();
   }
 }

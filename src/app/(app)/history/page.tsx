@@ -23,17 +23,21 @@ export default function HistoryPage() {
     setLoading(true);
     setError(null);
     try {
-      const [histRes, trendRes] = await Promise.all([
-        effortsApi.myHistory({ page: p, pageSize: PAGE_SIZE }),
-        effortsApi.trends({ weeks: 12 }),
-      ]);
+      const histRes = await effortsApi.myHistory({ page: p, pageSize: PAGE_SIZE });
       setEntries(histRes.data);
       setTotalPages(histRes.pagination.totalPages);
-      setTrends(trendRes.data);
     } catch {
       setError("Veriler yüklenemedi.");
     } finally {
       setLoading(false);
+    }
+
+    // Trends chart is admin-only; silently skip for regular users
+    try {
+      const trendRes = await effortsApi.trends({ weeks: 12 });
+      setTrends(trendRes.data);
+    } catch {
+      // not admin — no chart
     }
   }
 
@@ -43,7 +47,7 @@ export default function HistoryPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Efor Geçmişim</h1>
-        <p className="text-sm text-gray-500 mt-1">Geçmiş haftalara ait efor girişleriniz</p>
+        <p className="text-sm text-gray-500 mt-1">Haftalık efor girişleriniz</p>
       </div>
 
       <ErrorAlert message={error} onDismiss={() => setError(null)} />
