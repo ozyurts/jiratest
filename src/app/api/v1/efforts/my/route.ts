@@ -6,29 +6,8 @@ import { NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { paginated, unauthorized, internalError } from "@/lib/api-response";
+import { logger } from "@/lib/logger";
 import type { EffortEntryDto } from "@/types";
-
-function toDto(e: {
-  id: string; userId: string; weekStartDate: Date;
-  pastPercentage: number; todayPercentage: number; futurePercentage: number;
-  notes: string | null; createdBy: string; lastUpdater: string;
-  operationTime: Date; isDeleted: string;
-  teamId: string | null;
-  team: { name: string } | null;
-  user: { fullName: string; teamId: string | null; team: { name: string } | null };
-}): EffortEntryDto {
-  return {
-    id: e.id, userId: e.userId, userFullName: e.user.fullName,
-    teamId: e.teamId ?? e.user.teamId,
-    teamName: e.team?.name ?? e.user.team?.name ?? null,
-    weekStartDate: e.weekStartDate.toISOString().slice(0, 10),
-    pastPercentage: e.pastPercentage, todayPercentage: e.todayPercentage,
-    futurePercentage: e.futurePercentage, notes: e.notes,
-    createdBy: e.createdBy, lastUpdater: e.lastUpdater,
-    operationTime: e.operationTime.toISOString(),
-    isDeleted: e.isDeleted as "YES" | "NO",
-  };
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,7 +23,7 @@ export async function GET(request: NextRequest) {
     const [entries, total] = await prisma.$transaction([
       prisma.effortEntry.findMany({
         where,
-        include: { team: true, user: { include: { team: true } } },
+        include: { user: { include: { team: true } } },
         orderBy: { weekStartDate: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -52,8 +31,27 @@ export async function GET(request: NextRequest) {
       prisma.effortEntry.count({ where }),
     ]);
 
-    return paginated(entries.map(toDto), page, pageSize, total);
-  } catch {
+    const dtos: EffortEntryDto[] = entries.map((e) => ({
+      id: e.id,
+      userId: e.userId,
+      userFullName: e.user.fullName,
+      teamId: e.user.teamId,
+      teamName: e.user.team?.name ?? null,
+      weekStartDate: e.weekStartDate.toISOString().slice(0, 10),
+      pastPercentage: e.pastPercentage,
+      todayPercentage: e.todayPercentage,
+      futurePercentage: e.futurePercentage,
+      notes: e.notes,
+      createdBy: e.createdBy,
+      lastUpdater: e.lastUpdater,
+      operationTime: e.operationTime.toISOString(),
+      isDeleted: e.isDeleted as "YES" | "NO",
+    }));
+
+    logger.info("My history fetched", { userId: currentUser.sub, count: entries.length });
+    return paginated(dtos, page, pageSize, total);
+  } catch (err) {
+    logger.error("GET /efforts/my failed", { error: String(err) });
     return internalError();
   }
 }

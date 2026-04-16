@@ -17,16 +17,13 @@ function toDto(e: {
   pastPercentage: number; todayPercentage: number; futurePercentage: number;
   notes: string | null; createdBy: string; lastUpdater: string;
   operationTime: Date; isDeleted: string;
-  // teamId snapshot on entry; fall back to user's current team for old entries
-  teamId: string | null;
-  team: { name: string } | null;
   user: { fullName: string; teamId: string | null; team: { name: string } | null };
 }): EffortEntryDto {
   return {
     id: e.id, userId: e.userId,
     userFullName: e.user.fullName,
-    teamId: e.teamId ?? e.user.teamId,
-    teamName: e.team?.name ?? e.user.team?.name ?? null,
+    teamId: e.user.teamId,
+    teamName: e.user.team?.name ?? null,
     weekStartDate: e.weekStartDate.toISOString().slice(0, 10),
     pastPercentage: e.pastPercentage, todayPercentage: e.todayPercentage,
     futurePercentage: e.futurePercentage, notes: e.notes,
@@ -77,7 +74,8 @@ export async function GET(request: NextRequest) {
     ]);
 
     return paginated(entries.map(toDto), page, pageSize, total);
-  } catch {
+  } catch (err) {
+    logger.error("GET /efforts failed", { error: String(err) });
     return internalError();
   }
 }
@@ -115,7 +113,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existing) {
-      const updated = await prisma.effortEntry.update({
+      await prisma.effortEntry.update({
         where: { id: existing.id },
         data: {
           pastPercentage, todayPercentage, futurePercentage,
@@ -123,9 +121,13 @@ export async function POST(request: NextRequest) {
           teamId: snapshotTeamId,
           ...updateAudit(currentUser.email),
         },
-        include: { team: true, user: { include: { team: true } } },
       });
-      logger.info("Effort updated", { entryId: updated.id, userId: currentUser.sub });
+      logger.info("Effort updated", { entryId: existing.id, userId: currentUser.sub });
+      // Re-fetch with user relation for DTO
+      const updated = await prisma.effortEntry.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: { user: { include: { team: true } } },
+      });
       return ok(toDto(updated));
     }
 
@@ -139,12 +141,13 @@ export async function POST(request: NextRequest) {
         notes: notes ?? null,
         ...audit,
       },
-      include: { team: true, user: { include: { team: true } } },
+      include: { user: { include: { team: true } } },
     });
 
     logger.info("Effort created", { entryId: entry.id, userId: currentUser.sub });
     return created(toDto(entry));
-  } catch {
+  } catch (err) {
+    logger.error("POST /efforts failed", { error: String(err) });
     return internalError();
   }
 }
