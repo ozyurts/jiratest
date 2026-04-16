@@ -1,7 +1,7 @@
 "use client";
 
 import type { EffortEntryDto } from "@/types";
-import { formatWeekLabel } from "@/lib/week";
+import { formatWeekLabel, getISOWeekNumber } from "@/lib/week";
 import { Badge } from "@/components/ui/Badge";
 
 interface EffortHistoryTableProps {
@@ -35,8 +35,15 @@ export function EffortHistoryTable({ entries, showUser = false }: EffortHistoryT
         <tbody className="divide-y divide-gray-50">
           {entries.map((entry) => (
             <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
-              <td className="py-3 pr-4 text-gray-900 font-medium whitespace-nowrap">
-                {formatWeekLabel(new Date(entry.weekStartDate + "T00:00:00Z"))}
+              <td className="py-3 pr-4 whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 text-xs font-semibold">
+                    W{getISOWeekNumber(new Date(entry.weekStartDate + "T00:00:00Z"))}
+                  </span>
+                  <span className="text-gray-900 font-medium">
+                    {formatWeekLabel(new Date(entry.weekStartDate + "T00:00:00Z"))}
+                  </span>
+                </div>
               </td>
               {showUser && (
                 <td className="py-3 pr-4 text-gray-700">{entry.userFullName}</td>
